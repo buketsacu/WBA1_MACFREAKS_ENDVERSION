@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Musik Player</title>
+<meta charset="utf-8">
+<link href="../layout/styles/layout.css" rel="stylesheet" type="text/css" media="all">
+<link rel="stylesheet" href="../layout/mediaplayer.css" type="text/css" media="screen"/>
+<link rel="stylesheet" href="../layout/skin.css" type="text/css" media="screen"/>
+<link href="../layout/mediaplayer/jplayer.codrops.css" rel="stylesheet" type="text/css" />
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script>
+<script src="http://ajax.googleapis.com/ajax/libs/jqueryui/1.8.2/jquery-ui.min.js"></script>
+<script src="../js/mediaplayer/jquery.jcarousel.min.js" type="text/javascript"></script>
+<script src="../js/mediaplayer/cufon-yui.js" type="text/javascript"></script>
+<script type="text/javascript" src="../js/mediaplayer/jquery.jplayer.min.js"></script>
+<script src="../js/mediaplayer/ChunkFive_400.font.js" type="text/javascript"></script>
+<!-- <link rel="stylesheet" type="text/css" href="../layout/styles/default.css" />
+<link rel="stylesheet" type="text/css" href="../layout/styles/component.css" />
+<script src="../js/modernizr.custom.js"></script> -->
+<script type="text/javascript">
+  Cufon.replace('h2,h3,a',{
+    textShadow: '1px 1px 1px #000000'
+  });
+</script>
+<script type="text/javascript">
+  $(function() {
+    /**
+    * build the carousel for the Albums
+    */
+    $('#mp_albums').jcarousel({
+      scroll : 3
+    }).children('li')
+      .bind('click',function(){
+      //when clicking on an album, display its info, and hide the current one
+      var $this = $(this);
+      $('#mp_content_wrapper').find('.mp_content:visible')
+                  .hide();
+
+                    $('#mp_content_wrapper')
+                    .find('.mp_content:nth-child('+ parseInt($this.index()+1) +')')
+                      .fadeIn(1000);
+
+  });
+
+    /****  The Player  ****/
+    // Local copy of jQuery selectors, for performance.
+    var jpPlayTime = $("#jplayer_play_time");
+    var jpTotalTime = $("#jplayer_total_time");
+    var $list 		= $("#jplayer_playlist ul");
+
+    /**
+    * Innitialize the Player
+    * (see jPlayer documentation for other options)
+    */
+    $("#jquery_jplayer").jPlayer({
+      oggSupport	: true,
+      preload		:"auto"
+    })
+    .jPlayer("onProgressChange",
+      function(loadPercent, playedPercentRelative, playedPercentAbsolute, playedTime, totalTime) {
+      jpPlayTime.text($.jPlayer.convertTime(playedTime));
+      jpTotalTime.text($.jPlayer.convertTime(totalTime));
+    })
+    .jPlayer("onSoundComplete", function() {
+      playListNext();
+    });
+
+    /**
+    * click previous button, plays previous song
+    */
+    $("#jplayer_previous").bind('click', function(){
+      playListPrev();
+      $(this).blur();
+      return false;
+    });
+
+    /**
+    * click next button, plays next song
+    */
+    $("#jplayer_next").bind('click', function() {
+      playListNext();
+      $(this).blur();
+      return false;
+    });
+
+    /**
+    * plays song in position i of the list of songs (playlist)
+    */
+    function playSong(i){
+      var $next_song 		= $list.find('li:nth-child('+ i +')');
+      var mp3				= $next_song.find('.mp_mp3').html();
+      var ogg				= $next_song.find('.mp_ogg').html();
+      $list.find('.jplayer_playlist_current').removeClass("jplayer_playlist_current");
+      $next_song.find('a').addClass("jplayer_playlist_current");
+      $("#jquery_jplayer").jPlayer("setFile", mp3, ogg).jPlayer("play");
+    }
+
+    /**
+    * plays the next song in the playlist
+    */
+    function playListNext() {
+      var $list_nmb_elems = $list.children().length;
+      var $curr 			= $list.find('.jplayer_playlist_current');
+      var idx				= $curr.parent().index();
+      var index 			= (idx < $list_nmb_elems-1) ? idx+1 : 0;
+      playSong(index+1);
+    }
+
+    /**
+    * plays the previous song in the playlist
+    */
+    function playListPrev() {
+      var $list_nmb_elems = $list.children().length;
+      var $curr 			= $list.find('.jplayer_playlist_current');
+      var idx				= $curr.parent().index();
+      var index 			= (idx-1 >= 0) ? idx-1 : $list_nmb_elems-1;
+      playSong(index+1);
+    }
+
+    /**
+    * User clicks the play icon on one of the songs listed for an Album.
+    * Adds it to the Playlist, and plays it
+    */
+    function addFirst(song_idx,name,mp3,ogg) {
+      $list.empty();
+      /**
+      * each song element in the playlist has:
+      * - span for the close / remove action
+      * - the mp3 path
+      * - the ogg path
+      */
+      var song_html = "<a href='#' class='jplayer_playlist_current' tabindex='1'>" + name + "</a>";
+      song_html 	 += "<span></span>";
+      song_html 	 += "<div class='mp_mp3' style='display:none;'>"+mp3+"</div>";
+      song_html 	 += "<div class='mp_ogg' style='display:none;'>"+ogg+"</div>";
+      var $listItem = $("<li/>",{
+        id			: song_idx,
+        className	: 'jplayer_playlist_current',
+        html 		: song_html
+      });
+      $list.append($listItem);
+      //event to play the song when User clicks on it
+      $listItem.find('a').bind('click',clickSong);
+      //event to remove the song from the playlist when User clicks the remove button
+      $listItem.find('span').bind('click',removeSong);
+      //start playing it
+      $("#jquery_jplayer").jPlayer("setFile", mp3, ogg).jPlayer("play");
+      jpTotalTime.show();
+      jpPlayTime.show();
+    }
+
+    /**
+    * adds a song to the playlist, if not there already.
+    * if it is the only one, start playing it
+    */
+    function addToPlayList(song_idx,name,mp3,ogg) {
+      var $list_nmb_elems = $list.children().length;
+      //if already in the list return
+      if($list.find('#'+song_idx).length)
+        return;
+      //class for the current song being played
+      var c = '';
+      if($list_nmb_elems == 0)
+        c = 'jplayer_playlist_current';
+      var song_html = "<a href='#' class="+c+" tabindex='1'>" + name + "</a>";
+      song_html 	 += "<span></span>";
+      song_html 	 += "<div class='mp_mp3' style='display:none;'>"+mp3+"</div>";
+      song_html 	 += "<div class='mp_ogg' style='display:none;'>"+ogg+"</div>";
+      var $listItem = $("<li/>",{
+        id			: song_idx,
+        html 		: song_html
+      });
+      $list.append($listItem);
+      //if its the only song play it
+      if($list_nmb_elems == 0){
+        $("#jquery_jplayer").jPlayer("setFile", mp3, ogg).jPlayer("play");
+        jpTotalTime.show();
+        jpPlayTime.show();
+      }
+      $listItem.find('a').bind('click',clickSong);
+      $listItem.find('span').bind('click',removeSong);
+    }
+
+    /**
+    * removes a song from the playlist.
+    * if the song was the current one, and there are more songs
+    * in the playlist, then plays the next one.
+    * if there are no more, stops the player, and removes the status bar
+    * otherwise keeps playing whatever song was being played
+    */
+    function removeSong() {
+      var $this 	= $(this);
+      var current = $this.parent().find('a.jplayer_playlist_current').length;
+      $this.parent().remove();
+      var $list_nmb_elems = $list.children().length;
+      if($list_nmb_elems > 0 && current)
+        playListNext();
+      else if($list_nmb_elems == 0){
+        $("#jquery_jplayer").jPlayer("clearFile");
+        jpTotalTime.hide();
+        jpPlayTime.hide();
+      }
+      return false;
+    }
+
+    /**
+    * User clicks on a song in the playlist. Plays it
+    */
+    function clickSong() {
+        var index = $(this).parent().index();
+        playSong(index+1);
+        return false;
+    }
+
+    /**
+    * The next are the events for clicking on both "play" and "add to playlist" icons
+    */
+    $('#mp_content_wrapper').find('.mp_play').bind('click',function(){
+      var $this 		= $(this);
+      var $paths		= $this.parent().siblings('.mp_song_info');
+      var title   	= $paths.find('.mp_song_title').html();
+      var mp3			= $paths.find('.mp_mp3').html();
+      var ogg			= $paths.find('.mp_ogg').html();
+      var album_id 	= $this.closest('.mp_content').attr('id');
+      var song_index	= $this.parent().parent().index();
+      var song_idx	= album_id + '_' + song_index;
+      //add to playlist and play the song
+      addFirst(song_idx,title,mp3,ogg);
+    });
+    $('#mp_content_wrapper').find('.mp_addpl').bind('click',function(){
+      var $this 		= $(this);
+      var $paths		= $this.parent().siblings('.mp_song_info');
+      var title   	= $paths.find('.mp_song_title').html();
+      var mp3			= $paths.find('.mp_mp3').html();
+      var ogg			= $paths.find('.mp_ogg').html();
+      var album_id 	= $this.closest('.mp_content').attr('id');
+      var song_index	= $this.parent().parent().index();
+      var song_idx	= album_id + '_' + song_index;
+      //add to playlist and play the song if none is there
+      addToPlayList(song_idx,title,mp3,ogg);
+    });
+
+    /**
+    * we want to show on the album image, the play button for playing the whole album
+    */
+    $('#mp_content_wrapper').find('.mp_content').bind('mouseenter',function(){
+      var $this 		= $(this);
+      $this.find('.mp_playall').show();
+    }).bind('mouseleave',function(){
+      var $this 		= $(this);
+      $this.find('.mp_playall').hide();
+    });
+
+    /**
+    * to play the whole album, we play the first song and add all the others to the playlist.
+    * playing the first one, guarantees us that the playlist is set to empty before
+    */
+    $('#mp_content_wrapper').find('.mp_playall').bind('click',function(){
+      var $this 		= $(this);
+      var $album		= $this.parent();
+      $album.find('.mp_play:first').trigger('click');
+      $album.find('.mp_addpl').trigger('click');
+    })
+
+    /**
+    * playlist songs can be reordered
+    */
+    $list.sortable();
+    $list.disableSelection();
+
+  });
+</script>
+    <style>
+  .reference{
+    font-family:Arial;
+    position:relative;
+    width:100%;
+    font-size:12px;
+    text-transform:uppercase;
+    text-align:center;
+  }
+  .reference a{
+    color:#f9f9f9;
+    text-decoration:none;
+    margin-right:20px;
+  }
+</style>
+</head>
+<body id="top">
+  <div class="wrapper navtop">
+    <header id="header" class="clear">
+      <nav id="mainav">
+        <ul class="clear">
+          <li><img class="ictop" src="../images/navtop/bluetooth.png" alt=""></li>
+          <li></li>
+          <li></li>
+          <li></li>
+          <li>07. Dez 2017</li>
+          <li>12:50</li>
+        </ul>
+      </nav>
+      <!-- ################################################################################################ -->
+    </header>
+  </div>
+<div class="wrapper row1">
+  <header id="header" class="clear">
+    <!-- ################################################################################################ -->
+    <div id="logo">
+      <a href="../index.html"><img class="logo" src="../images/logo.png" alt=""></a>
+    </div>
+    <nav id="mainav">
+      <ul class="clear">
+        <li class="active"><a href="gallery.html"><img class="icon" src="../images/music.png" alt=""></a></li>
+        <li><a href="karte.html"><img class="icon" src="../images/karte.png" alt=""></a></li>
+        <li><a href="kontakte.html"><img class="icon" src="../images/kontakte.png" alt=""></a></li>
+        <li><a href="kalender.html"><img class="icon" src="../images/calendar.png" alt=""></a></li>
+        <li><a href="wetter.html"><img class="icon" src="../images/wetter.png" alt=""></a></li>
+        <li><a class="drop" href="#"><img class="icon" src="../images/pfeil.png" alt=""></a>
+          <ul>
+            <li><a href="pages/gallery.html">Service</a></li>
+            <li><a href="pages/full-width.html">Helligkeit</a></li>
+            <li><a href="pages/sidebar-left.html">Sicherheit</a></li>
+            <li><a href="pages/sidebar-right.html">Scheibenwischer</a></li>
+          </ul>
+        </li>
+      </ul>
+    </nav>
+    <!-- ################################################################################################ -->
+  </header>
+</div>
+<!-- ################################################################################################ -->
+<!-- ################################################################################################ -->
+<!-- ################################################################################################ -->
+<div class="wrapper row2" style="background-image:url(../images/demo/slides/1.png)">
+  <main id="container" class="clear">
+    <div class="mp_wrapper">
+      <div id="mp_content_wrapper" class="mp_content_wrapper">
+        <div class="mp_content" id="c_album_1">
+          <img src="../music/ariana/ariana205.png" alt="ariana"/>
+          <a href="#" class="mp_playall">Play all</a>
+          <div class="mp_description">
+            <h2>Yours Truly</h2>
+            <p>
+              Sänger:Ariana Grande<br>
+              Erscheinungsdatum: 3.September 2013
+            </p>
+          </div>
+          <div class="mp_songs">
+            <div>
+              <h3> Baby I</h3>
+              <div class="mp_options">
+                <span class="mp_play">Play</span>
+                <span class="mp_addpl">Add to playlist</span>
+              </div>
+              <div class="mp_song_info" style="display:none;">
+                <span class="mp_song_title">Baby I</span>
+                <span class="mp_mp3">../music/ariana/Ariana Grande - Baby I.mp3</span>
+                <span class="mp_ogg">../music/ariana/Ariana Grande - Baby I Kopie.ogg</span>
+              </div>
+            </div>
+            <div>
+              <h3> Bang Bang</h3>
+              <div class="mp_options">
+                <span class="mp_play">Play</span>
+                <span class="mp_addpl">Add to playlist</span>
+              </div>
+              <div class="mp_song_info" style="display:none;">
+                <span class="mp_song_title">Bang Bang</span>
+                <span class="mp_mp3">../music/ariana/Ariana Grande - Bang Bang.mp3</span>
+                <span class="mp_ogg">../music/ariana/Ariana Grande - Bang Bang Kopie.ogg</span>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        <div class="mp_content" id="c_album_2" style="display:none;">
+          <img src="../music/album3/murat205.png" alt="album3"/>
+          <a href="#" class="mp_playall">Play all</a>
+          <div class="mp_description">
+            <h2>Janti</h2>
+            <p>
+              Sänger: Murat Boz <br>
+              Erscheinungsjahr: 2016
+            </p>
+          </div>
+          <div class="mp_songs">
+            <div>
+              <h3>Adini Bilen Yazsin</h3>
+              <div class="mp_options">
+                <span class="mp_play">Play</span>
+                <span class="mp_addpl">Add to playlist</span>
+              </div>
+              <div class="mp_song_info" style="display:none;">
+                <span class="mp_song_title">Adini bilen Yazsin</span>
+                <span class="mp_mp3">../music/album3/Murat Boz - Adını Bilen Yazsın.mp3</span>
+                <span class="mp_ogg">../music/album3/Murat Boz - Adını Bilen Yazsın Kopie.ogg</span>
+              </div>
+            </div>
+            <div>
+              <h3> Bir Dunya</h3>
+              <div class="mp_options">
+                <span class="mp_play">Play</span>
+                <span class="mp_addpl">Add to playlist</span>
+              </div>
+              <div class="mp_song_info" style="display:none;">
+                <span class="mp_song_title">Bir Dünya</span>
+                <span class="mp_mp3">../music/album3/Murat Boz - Bir Dünya.mp3</span>
+                <span class="mp_ogg">../music/album3/Murat Boz - Bir Dünya Kopie.ogg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mp_player">
+        <div id="jquery_jplayer"></div>
+        <div class="jp-playlist-player">
+          <div class="jp-interface">
+            <ul class="jp-controls">
+              <li><a href="#" id="jplayer_play" class="jp-play" tabindex="1">play</a></li>
+              <li><a href="#" id="jplayer_pause" class="jp-pause" tabindex="1">pause</a></li>
+              <li><a href="#" id="jplayer_stop" class="jp-stop" tabindex="1">stop</a></li>
+              <li><a href="#" id="jplayer_volume_min" class="jp-volume-min" tabindex="1">min volume</a></li>
+              <li><a href="#" id="jplayer_volume_max" class="jp-volume-max" tabindex="1">max volume</a></li>
+              <li><a href="#" id="jplayer_previous" class="jp-previous" tabindex="1">previous</a></li>
+              <li><a href="#" id="jplayer_next" class="jp-next" tabindex="1">next</a></li>
+            </ul>
+            <div class="jp-progress">
+              <div id="jplayer_load_bar" class="jp-load-bar">
+                <div id="jplayer_play_bar" class="jp-play-bar"></div>
+              </div>
+            </div>
+            <div id="jplayer_volume_bar" class="jp-volume-bar">
+              <div id="jplayer_volume_bar_value" class="jp-volume-bar-value"></div>
+            </div>
+            <div id="jplayer_play_time" class="jp-play-time"></div>
+            <div id="jplayer_total_time" class="jp-total-time"></div>
+          </div>
+          <div id="jplayer_playlist" class="jp-playlist"><ul></ul></div>
+        </div>
+      </div>
+      <ul id="mp_albums" class="mp_albums jcarousel-skin">
+        <li><img src="../music/ariana/ariana205.png" alt="ariana" /></li>
+        <li><img src="../music/album3/murat205.png" alt="album3" /></li>
+
+      </ul>
+    </div>
+</div>
+
+<div class="wrapper row5">
+  <div id="copyright" class="clear">
+
+    <p class="fl_left">Copyright &copy; 2014 - All Rights Reserved - <a href="#">Domain Name</a></p>
+    <p class="fl_right">Template by <a target="_blank" href="http://www.os-templates.com/" title="Free Website Templates">OS Templates</a></p>
+
+  </div>
+</div>
+</body>
+</html>
